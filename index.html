@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lift Week</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lift Week">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #191d24;
+    --card-line: #262c36;
+    --text: #f2f5f8;
+    --muted: #838d9c;
+    --gray: #4b5563;
+    --green: #22c55e;
+    --green-dim: #14361f;
+    --red: #ef4444;
+    --red-dim: #3a1618;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font: 400 17px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    padding: calc(env(safe-area-inset-top) + 28px) 20px calc(env(safe-area-inset-bottom) + 28px);
+    max-width: 560px;
+    margin: 0 auto;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  header { margin-bottom: 22px; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0; }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; text-align: left;
+    background: var(--card);
+    border: 1px solid var(--card-line);
+    border-radius: 16px;
+    padding: 18px 18px;
+    color: inherit; font: inherit;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+  }
+  .row:active { transform: scale(0.985); }
+  .box {
+    flex: none; width: 30px; height: 30px; border-radius: 9px;
+    border: 2px solid var(--gray); background: transparent;
+    display: grid; place-items: center;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .box svg { width: 18px; height: 18px; opacity: 0; transition: opacity .15s ease; }
+  .box svg path { stroke: #0f1115; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  .name { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .state { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+  .row.done { background: var(--green-dim); border-color: var(--green); }
+  .row.done .box { background: var(--green); border-color: var(--green); }
+  .row.done .box svg { opacity: 1; }
+  .row.done .state { color: var(--green); }
+
+  .row.missed { background: var(--red-dim); border-color: var(--red); }
+  .row.missed .box { border-color: var(--red); }
+  .row.missed .state { color: var(--red); }
+
+  .row.today { box-shadow: 0 0 0 1px var(--card-line) inset; }
+  .row.today .name::after {
+    content: "Today"; margin-left: 10px; font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; color: var(--muted); vertical-align: 2px;
+  }
+  footer { margin-top: 26px; display: flex; align-items: center; justify-content: space-between; }
+  .note { color: var(--muted); font-size: 13px; }
+  button.reset {
+    background: none; border: 1px solid var(--card-line); color: var(--muted);
+    font: 600 13px/1 -apple-system, sans-serif; padding: 10px 14px; border-radius: 10px; cursor: pointer;
+  }
+  button.reset:active { background: var(--card); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lift Week</h1>
+  <p class="sub" id="weekLabel"></p>
+</header>
+
+<ul id="list"></ul>
+
+<footer>
+  <span class="note">Resets every Sunday</span>
+  <button class="reset" id="clear" type="button">Clear week</button>
+</footer>
+
+<script>
+(function () {
+  // day: 0 = Sunday ... 6 = Saturday
+  var PLAN = [
+    { key: 'sun', day: 0, name: 'Sunday Cardio' },
+    { key: 'tue', day: 2, name: 'Tuesday Lift' },
+    { key: 'thu', day: 4, name: 'Thursday Lift' },
+    { key: 'fri', day: 5, name: 'Friday Lift' }
+  ];
+  var STORE = 'liftweek.v1';
+  var CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+
+  var list = document.getElementById('list');
+  var weekLabel = document.getElementById('weekLabel');
+  var lastKey = null;
+  var lastDay = null;
+
+  function weekStart(now) {
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    d.setDate(d.getDate() - d.getDay()); // back to Sunday
+    return d;
+  }
+  function stamp(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function load(key) {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORE) || 'null');
+      if (raw && raw.week === key && raw.done) return raw.done;
+    } catch (e) {}
+    return {};
+  }
+  function save(key, done) {
+    try { localStorage.setItem(STORE, JSON.stringify({ week: key, done: done })); } catch (e) {}
+  }
+
+  function render(force) {
+    var now = new Date();
+    var key = stamp(weekStart(now));
+    var today = now.getDay();
+    if (!force && key === lastKey && today === lastDay) return;  // nothing has rolled over
+    lastKey = key;
+    lastDay = today;
+
+    var done = load(key);
+
+    weekLabel.textContent = 'Week of ' + weekStart(now).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+    list.innerHTML = '';
+
+    PLAN.forEach(function (item) {
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'row';
+
+      var checked = !!done[item.key];
+      var passed = today > item.day;             // that day is over for this week
+      if (checked) btn.classList.add('done');
+      else if (passed) btn.classList.add('missed');
+      if (today === item.day) btn.classList.add('today');
+
+      btn.innerHTML =
+        '<span class="box">' + CHECK + '</span>' +
+        '<span class="name">' + item.name + '</span>' +
+        '<span class="state">' + (checked ? 'Done' : passed ? 'Missed' : 'To do') + '</span>';
+
+      btn.addEventListener('click', function () {
+        var d = load(lastKey);
+        if (d[item.key]) delete d[item.key]; else d[item.key] = true;
+        save(lastKey, d);
+        render(true);
+      });
+
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  document.getElementById('clear').addEventListener('click', function () {
+    save(lastKey, {});
+    render(true);
+  });
+
+  render(true);
+  // catch the Sunday rollover / midnight while the app sits open
+  setInterval(function () { render(false); }, 30000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) render(true);
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>
