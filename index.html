@@ -41,28 +41,45 @@
   h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
   .sub { color: var(--muted); font-size: 14px; margin: 0; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+
   .row {
-    display: flex; align-items: center; gap: 14px;
-    width: 100%; text-align: left;
+    display: flex; align-items: center;
     background: var(--card);
     border: 1px solid var(--card-line);
     border-radius: 16px;
-    padding: 18px 18px;
-    color: inherit; font: inherit;
-    cursor: pointer;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+    overflow: hidden;
+    transition: background .15s ease, border-color .15s ease;
   }
-  .row:active { transform: scale(0.985); }
+  .row button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+  .check {
+    flex: none; padding: 18px 4px 18px 18px;
+    display: grid; place-items: center;
+  }
+  .check:active .box { transform: scale(0.9); }
   .box {
-    flex: none; width: 30px; height: 30px; border-radius: 9px;
+    width: 30px; height: 30px; border-radius: 9px;
     border: 2px solid var(--gray); background: transparent;
     display: grid; place-items: center;
-    transition: background .15s ease, border-color .15s ease;
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
   }
   .box svg { width: 18px; height: 18px; opacity: 0; transition: opacity .15s ease; }
   .box svg path { stroke: #0f1115; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-  .name { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-  .state { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+  .detail {
+    flex: 1; min-width: 0; text-align: left;
+    display: flex; align-items: center; gap: 10px;
+    padding: 18px 18px 18px 14px;
+  }
+  .detail:active { background: rgba(255,255,255,.04); }
+  .labels { min-width: 0; flex: 1; }
+  .name { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; display: block; }
+  .preview {
+    display: block; margin-top: 4px; font-size: 13px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .state { flex: none; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .chev { flex: none; width: 8px; height: 13px; opacity: .45; }
+  .chev path { stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 
   .row.done { background: var(--green-dim); border-color: var(--green); }
   .row.done .box { background: var(--green); border-color: var(--green); }
@@ -73,7 +90,6 @@
   .row.missed .box { border-color: var(--red); }
   .row.missed .state { color: var(--red); }
 
-  .row.today { box-shadow: 0 0 0 1px var(--card-line) inset; }
   .row.today .name::after {
     content: "Today"; margin-left: 10px; font-size: 11px; font-weight: 700;
     letter-spacing: .08em; color: var(--muted); vertical-align: 2px;
@@ -85,6 +101,34 @@
     font: 600 13px/1 -apple-system, sans-serif; padding: 10px 14px; border-radius: 10px; cursor: pointer;
   }
   button.reset:active { background: var(--card); }
+
+  /* notes sheet */
+  .sheet {
+    position: fixed; inset: 0; z-index: 10;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 18px);
+    transform: translateY(100%);
+    transition: transform .22s ease;
+    visibility: hidden;
+  }
+  .sheet.open { transform: translateY(0); visibility: visible; }
+  .sheet-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .sheet-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .sheet-done {
+    background: none; border: 0; color: var(--green); cursor: pointer;
+    font: 600 17px -apple-system, sans-serif; padding: 8px 0 8px 12px;
+  }
+  .sheet-hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  textarea {
+    flex: 1; width: 100%;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--card-line); border-radius: 14px;
+    padding: 16px;
+    font: 400 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    resize: none; -webkit-user-select: text; user-select: text;
+  }
+  textarea:focus { outline: none; border-color: var(--gray); }
 </style>
 </head>
 <body>
@@ -100,6 +144,15 @@
   <button class="reset" id="clear" type="button">Clear week</button>
 </footer>
 
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-bar">
+    <span class="sheet-title" id="sheetTitle"></span>
+    <button class="sheet-done" id="sheetDone" type="button">Done</button>
+  </div>
+  <p class="sheet-hint">Exercises for this day. Saved automatically, kept week to week.</p>
+  <textarea id="sheetNotes" placeholder="Bench 3x5&#10;Rows 3x8&#10;Curls 3x12" spellcheck="false"></textarea>
+</div>
+
 <script>
 (function () {
   // day: 0 = Sunday ... 6 = Saturday
@@ -110,12 +163,16 @@
     { key: 'fri', day: 5, name: 'Friday Lift' }
   ];
   var STORE = 'liftweek.v1';
+  var NOTES = 'liftweek.notes.v1';
   var CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+  var CHEV = '<svg class="chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5L6.5 6.5 1.5 11.5"/></svg>';
 
   var list = document.getElementById('list');
   var weekLabel = document.getElementById('weekLabel');
-  var lastKey = null;
-  var lastDay = null;
+  var sheet = document.getElementById('sheet');
+  var sheetTitle = document.getElementById('sheetTitle');
+  var sheetNotes = document.getElementById('sheetNotes');
+  var lastKey = null, lastDay = null, openKey = null;
 
   function weekStart(now) {
     var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -135,6 +192,23 @@
   function save(key, done) {
     try { localStorage.setItem(STORE, JSON.stringify({ week: key, done: done })); } catch (e) {}
   }
+  // Notes are the plan for that day, so they survive the weekly reset.
+  function loadNotes() {
+    try { return JSON.parse(localStorage.getItem(NOTES) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function saveNotes(notes) {
+    try { localStorage.setItem(NOTES, JSON.stringify(notes)); } catch (e) {}
+  }
+  function summarize(text) {
+    var lines = (text || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    if (!lines.length) return '';
+    return lines.length > 1 ? lines[0] + ' + ' + (lines.length - 1) + ' more' : lines[0];
+  }
+  function esc(s) {
+    return s.replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
 
   function render(force) {
     var now = new Date();
@@ -145,41 +219,82 @@
     lastDay = today;
 
     var done = load(key);
+    var notes = loadNotes();
 
     weekLabel.textContent = 'Week of ' + weekStart(now).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
     list.innerHTML = '';
 
     PLAN.forEach(function (item) {
-      var li = document.createElement('li');
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'row';
-
       var checked = !!done[item.key];
       var passed = today > item.day;             // that day is over for this week
-      if (checked) btn.classList.add('done');
-      else if (passed) btn.classList.add('missed');
-      if (today === item.day) btn.classList.add('today');
+      var summary = summarize(notes[item.key]);
 
-      btn.innerHTML =
-        '<span class="box">' + CHECK + '</span>' +
-        '<span class="name">' + item.name + '</span>' +
-        '<span class="state">' + (checked ? 'Done' : passed ? 'Missed' : 'To do') + '</span>';
+      var li = document.createElement('li');
+      var row = document.createElement('div');
+      row.className = 'row' + (checked ? ' done' : passed ? ' missed' : '') + (today === item.day ? ' today' : '');
 
-      btn.addEventListener('click', function () {
+      var check = document.createElement('button');
+      check.type = 'button';
+      check.className = 'check';
+      check.setAttribute('aria-pressed', checked ? 'true' : 'false');
+      check.setAttribute('aria-label', (checked ? 'Uncheck ' : 'Check ') + item.name);
+      check.innerHTML = '<span class="box">' + CHECK + '</span>';
+      check.addEventListener('click', function () {
         var d = load(lastKey);
         if (d[item.key]) delete d[item.key]; else d[item.key] = true;
         save(lastKey, d);
         render(true);
       });
 
-      li.appendChild(btn);
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'detail';
+      open.setAttribute('aria-label', 'Notes for ' + item.name);
+      open.innerHTML =
+        '<span class="labels">' +
+          '<span class="name">' + esc(item.name) + '</span>' +
+          (summary ? '<span class="preview">' + esc(summary) + '</span>' : '') +
+        '</span>' +
+        '<span class="state">' + (checked ? 'Done' : passed ? 'Missed' : 'To do') + '</span>' +
+        CHEV;
+      open.addEventListener('click', function () { openSheet(item); });
+
+      row.appendChild(check);
+      row.appendChild(open);
+      li.appendChild(row);
       list.appendChild(li);
     });
   }
 
+  function openSheet(item) {
+    openKey = item.key;
+    sheetTitle.textContent = item.name;
+    sheetNotes.value = loadNotes()[item.key] || '';
+    sheet.classList.add('open');
+    sheetNotes.focus();
+  }
+  function closeSheet() {
+    if (!openKey) return;
+    openKey = null;
+    sheetNotes.blur();
+    sheet.classList.remove('open');
+    render(true);
+  }
+
+  sheetNotes.addEventListener('input', function () {
+    if (!openKey) return;
+    var notes = loadNotes();
+    var text = sheetNotes.value;
+    if (text.trim()) notes[openKey] = text; else delete notes[openKey];
+    saveNotes(notes);
+  });
+  document.getElementById('sheetDone').addEventListener('click', closeSheet);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSheet();
+  });
+
   document.getElementById('clear').addEventListener('click', function () {
-    save(lastKey, {});
+    save(lastKey, {});   // checkmarks only; notes stay put
     render(true);
   });
 
@@ -187,7 +302,7 @@
   // catch the Sunday rollover / midnight while the app sits open
   setInterval(function () { render(false); }, 30000);
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) render(true);
+    if (!document.hidden && !openKey) render(true);
   });
 
   if ('serviceWorker' in navigator) {

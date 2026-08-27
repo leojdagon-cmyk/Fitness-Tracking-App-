@@ -1,5 +1,5 @@
 // Cache the whole app so it opens with no signal.
-var CACHE = 'liftweek-v1';
+var CACHE = 'liftweek-v2';
 var ASSETS = [
   './',
   './index.html',
